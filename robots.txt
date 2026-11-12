@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://corretorluisfernando.com.br/sitemap.xml
