@@ -1,0 +1,60 @@
+name: Sincronizar site com CRM
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '3-58/5 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: site-crm-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.build.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.25.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: _sync/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: _sync
+      - run: pnpm test
+        working-directory: _sync
+      - name: Ler base pública e gerar template original
+        id: build
+        working-directory: _sync
+        env:
+          SYNC_EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$SYNC_EVENT" = "schedule" ]; then
+            node render.cjs --live
+          else
+            node render.cjs --live --force
+          fi
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.build.outputs.changed == 'true'
+        with:
+          path: site-dist
+  deploy:
+    if: needs.build.outputs.changed == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar catálogo atualizado
+        id: deployment
+        uses: actions/deploy-pages@v4

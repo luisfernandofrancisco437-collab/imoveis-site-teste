@@ -2,7 +2,7 @@
 // No CRM/Supabase dependency and no automatic message sending.
 (()=>{
   const data=document.getElementById('catalogue-data');
-  if(data){
+  if(data&&!document.getElementById('site-sync-config')){
     const catalogue=JSON.parse(data.textContent),byCode=new Map(catalogue.map(p=>[p.codigo,p]));
     const search=document.querySelector('.searchPanel input'),operation=document.querySelector('.searchPanel select');
     const cards=Array.from(document.querySelectorAll('.propertyCard'));

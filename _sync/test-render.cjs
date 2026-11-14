@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');const {render,validate,API}=require('./render.cjs');
+const photo=API+'/photo/TEST001/'+'a'.repeat(64)+'.webp?site=luis-fernando';
+const item={codigo:'TEST001',titulo:'Casa de teste',tipo:'Casa',cidade:'Mogi Guaçu',bairro:'Bairro de teste',operacao:'Locação e Venda',status:'Disponível',valorVenda:300000,valorLocacao:1800,valor:300000,dormitorios:2,vagas:1,area:90,fotos:[photo],foto:photo,descricao:'<texto literal de teste>',prop:'MUST_NOT_PUBLISH',tel:'MUST_NOT_PUBLISH',rua:'MUST_NOT_PUBLISH',obs:'MUST_NOT_PUBLISH'};
+const fixture=items=>({schemaVersion:1,site:'luis-fernando',revision:'synthetic-test',sourceRevision:5,updatedAt:'2026-11-13T12:00:00Z',items});
+(async()=>{const f=fixture([item]);const result=await render(f,['imovel/REMOVIDO/index.html','imoveis/slug/REMOVIDO/index.html']);const home=result.files.get('index.html');assert(home.includes('class="heroVisual glass"'));assert(home.includes('site-sync-config'));assert(home.includes('catalogo-live-snapshot'));assert(!home.includes('MUST_NOT_PUBLISH'));assert(!home.includes('authenticated/crm-private'));assert(home.includes('R$'));assert(result.files.get('imovel/TEST001/index.html').includes('1800'));assert(result.files.get('sitemap.xml').includes('/imovel/TEST001/'));const removed=result.files.get('imovel/REMOVIDO/index.html');assert(removed.includes('noindex'));assert(!removed.match(/<main\b[^>]*>([\s\S]*?)<\/main>/)[1].includes('Casa de teste'));
+assert(Buffer.from(result.files.get('original.css')).equals(fs.readFileSync(path.join(__dirname,'assets/original.css'))));assert(result.files.get('acesso/index.html'));
+const detail=result.files.get('imovel/TEST001/index.html');
+assert(detail.includes('<meta property="og:image" content="'+photo+'">'),'OG image must be the public proxy URL, without a prefixed site origin.');
+assert(detail.includes('<meta property="og:type" content="article">'));
+const graphScripts=html=>[...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m=>JSON.parse(m[1]));
+const listingEntity=graphScripts(detail).flatMap(s=>s['@graph']||[s]).find(s=>s.identifier==='TEST001');
+assert.deepEqual(listingEntity.image,[photo]);assert(listingEntity.image.every(v=>new URL(v).origin===new URL(API).origin));
+assert(graphScripts(home).flatMap(s=>s['@graph']||[s]).some(s=>s['@type']==='RealEstateAgent'));
+assert(graphScripts(home).flatMap(s=>s['@graph']||[s]).some(s=>s['@type']==='WebSite'));
+const cents=await render(fixture([{...item,valorVenda:300000.49,valorLocacao:1800.75,valorCondominio:274.74,iptu:0}]));
+for(const name of ['index.html','imovel/TEST001/index.html']){const html=cents.files.get(name),main=html.split('<script type="application/json"')[0];assert(main.includes('300.000,49'));assert(main.includes('1.800,75'));}
+assert(cents.files.get('imovel/TEST001/index.html').includes('274,74'));
+const unavailable=await render(fixture([{...item,status:'Indisponível'}]));assert.equal(unavailable.available,0);const unavailableDetail=unavailable.files.get('imovel/TEST001/index.html');assert(unavailableDetail.includes('Este imóvel não está mais disponível'));assert(unavailableDetail.includes('noindex'));assert(!unavailable.files.get('sitemap.xml').includes('/imovel/TEST001/'));const unavailableEntity=graphScripts(unavailableDetail).flatMap(s=>s['@graph']||[s]).find(s=>s.identifier==='TEST001');assert(unavailableEntity.offers.every(o=>o.availability==='https://schema.org/OutOfStock'));
+const empty=await render(fixture([]));assert.equal(empty.available,0);assert(empty.files.get('index.html').includes('0'));
+assert.throws(()=>validate(fixture([{...item,fotos:['https://evil.invalid/private']}])));assert.throws(()=>validate(fixture([item,item])));assert.throws(()=>validate(fixture([{...item,valorLocacao:undefined}])));
+const changed=await render(fixture([{...item,status:'Alugado',valorLocacao:2000}]));assert.equal(changed.available,0);assert(changed.files.get('imovel/TEST001/index.html').includes('Alugado'));assert(!changed.files.get('sitemap.xml').includes('/imovel/TEST001/'));
+for(const [name,html]of result.files)if(name.endsWith('.html')&&name!=='acesso/index.html'){for(const match of String(html).matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g))JSON.parse(match[1]);}
+console.log('PASS: original template, public allowlist, exact cents, dual prices, absolute OG/JSON-LD images, original global schema, new/withdrawn/sold/unavailable pages, sitemap, CSS and recovery, empty feed and invalid-source refusal.');})().catch(e=>{console.error(e.stack);process.exitCode=1;});
