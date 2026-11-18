@@ -1,5 +1,5 @@
 'use strict';
-const VERSION='original-seo-20261118-v2';
+const VERSION='original-seo-20261118-v3';
 const ORIGIN='https://corretorluisfernando.com.br';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const json=v=>JSON.stringify(v).replace(/</g,'\\u003c');

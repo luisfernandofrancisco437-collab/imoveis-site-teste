@@ -34,7 +34,15 @@ function render(feed,previousManifest=[],options={}){
   const layoutHTML=renderToStaticMarkup(React.createElement(Layout,{children:null}));
   const globalSchema=layoutHTML.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/)?.[0];
   assert(globalSchema,'Original public business/site schema missing.');
-  const markup=el=>renderToStaticMarkup(el).replace(/<div class="specs">([\s\S]*?)<\/div>/g,(_,s)=>'<div class="specs">'+s.replace(/<span>0 (?:dorm\.|vagas|m²)<\/span>/g,'')+'</div>').replace(/<p>([0-9.]+ dormitórios · [0-9.]+ vagas · [0-9.]+ m²)<\/p>/g,(_,s)=>'<p>'+s.split(' · ').filter(x=>!/^0 (?:dormitórios|vagas|m²)$/.test(x)).join(' · ')+'</p>');
+  const markup=el=>renderToStaticMarkup(el)
+    .replace(/<div class="specs">([\s\S]*?)<\/div>/g,(_,s)=>{
+      const facts=s.replace(/<span>\s*(?:0(?:[.,]0+)?\s*)?(?:dorm\.|vagas|m²)\s*<\/span>/g,'');
+      return facts.trim()?'<div class="specs">'+facts+'</div>':'';
+    })
+    .replace(/<p>((?:[0-9.,]+\s*)?dormitórios\s*·\s*(?:[0-9.,]+\s*)?vagas\s*·\s*(?:[0-9.,]+\s*)?m²)<\/p>/g,(_,s)=>{
+      const facts=s.split(/\s*·\s*/).filter(x=>!/^\s*(?:0(?:[.,]0+)?\s*)?(?:dormitórios|vagas|m²)\s*$/.test(x));
+      return facts.length?'<p>'+facts.join(' · ')+'</p>':'';
+    });
   const urls=new Map(),seoState={schemaVersion:1,routes:{},aliases:{}};
   const previousState=options.previousState?.schemaVersion===1?options.previousState:{routes:{}};
   const builtAt=options.builtAt||new Date().toISOString();

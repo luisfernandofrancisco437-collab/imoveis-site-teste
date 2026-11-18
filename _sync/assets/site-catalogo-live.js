@@ -228,7 +228,7 @@
     if (item.operacao === 'Locação e Venda') append(info, append(node(doc, 'div', 'dualPrices'), priceBlock(doc, 'Locação mensal', item.valorLocacao, '/mês'), priceBlock(doc, 'Venda', item.valorVenda, '')));
     else append(info, node(doc, 'strong', 'detailPrice', money(item.valor) + (item.operacao === 'Locação' && item.valor ? '/mês' : '')));
     append(info, node(doc, 'a', 'detailWhatsapp', 'Tenho interesse pelo WhatsApp', { href: whatsapp(item), target: '_blank', rel: 'noopener noreferrer', 'data-site-event': 'whatsapp_click', 'data-property-code': item.codigo }));
-    append(main, ld, oldHeader || detailHeader(doc), crumbs, append(hero, gallery, info), section(doc, 'Descrição do imóvel', item.descricao || 'As informações disponíveis estão apresentadas nesta página. Fale com o corretor para confirmar detalhes e disponibilidade.'));
+    append(main, ld, oldHeader || detailHeader(doc), crumbs, append(hero, gallery, info), section(doc, 'Descrição do imóvel', item.descricao || seoDescription(item)));
     var details = [];
     if (item.condominio) details.push('Condomínio residencial: ' + item.condominio);
     if (item.valorCondominio !== null) details.push('Valor de condomínio informado: ' + money(item.valorCondominio));
