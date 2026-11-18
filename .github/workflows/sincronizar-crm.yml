@@ -43,7 +43,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v4
         if: steps.build.outputs.changed == 'true'
         with:
-          path: site-dist
+          path: ${{ steps.build.outputs.artifact_path }}
   deploy:
     if: needs.build.outputs.changed == 'true'
     needs: build

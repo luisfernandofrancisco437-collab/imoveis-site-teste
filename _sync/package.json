@@ -3,6 +3,6 @@
   "private": true,
   "version": "1.0.0",
   "packageManager": "pnpm@11.25.0",
-  "scripts": {"build": "node render.cjs --live", "test": "node test-render.cjs"},
+  "scripts": {"build": "node render.cjs --live", "test": "node test-render.cjs && node test-local-seo.cjs && node test-analytics.cjs"},
   "dependencies": {"react":"19.2.6","react-dom":"19.2.6","typescript":"5.9.3"}
 }
