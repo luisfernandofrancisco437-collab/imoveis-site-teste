@@ -90,6 +90,7 @@
     var revision = typeof raw.revision === 'string' ? raw.revision.trim() : '';
     if (!revision || revision.length > 256 || !/^[A-Za-z0-9._:-]+$/.test(revision)) throw new Error('Revisão pública inválida.');
     var items = raw.items.map(normalizeItem), unique = new Set();
+    items.sort(function(a,b){return (Date.parse(b.publicadoEm)||0)-(Date.parse(a.publicadoEm)||0)||a.codigo.localeCompare(b.codigo,'en');});
     items.forEach(function (item) { if (unique.has(item.codigo)) throw new Error('Código duplicado no catálogo público.'); unique.add(item.codigo); });
     if (raw.sourceRevision !== undefined && raw.sourceRevision !== null && (!Number.isSafeInteger(raw.sourceRevision) || raw.sourceRevision < 0)) throw new Error('Versão da fonte pública inválida.');
     var sourceRevision = Number.isSafeInteger(raw.sourceRevision) && raw.sourceRevision >= 0 ? raw.sourceRevision : null;
@@ -354,6 +355,11 @@
     }
     function accept(raw, source, preserveSSR) {
       var next = normalizeCatalog(raw, config.site);
+      if(current){
+        var prior=new Map(current.items.map(function(p){return [p.codigo,p.publicadoEm];}));
+        next.items.forEach(function(p){if(!p.publicadoEm)p.publicadoEm=prior.has(p.codigo)?prior.get(p.codigo):next.updatedAt;});
+        next.items.sort(function(a,b){return (Date.parse(b.publicadoEm)||0)-(Date.parse(a.publicadoEm)||0)||a.codigo.localeCompare(b.codigo,'en');});
+      }
       if (current && current.sourceRevision !== null && (next.sourceRevision === null || next.sourceRevision < current.sourceRevision)) return false;
       if (current && current.sourceRevision === null && next.sourceRevision === null && current.updatedAt && next.updatedAt && Date.parse(next.updatedAt) < Date.parse(current.updatedAt)) return false;
       var changed = !current || current.revision !== next.revision;

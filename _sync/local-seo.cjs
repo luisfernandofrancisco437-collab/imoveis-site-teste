@@ -68,7 +68,7 @@ function buildLocalPages(rawItems,helpers={}){
     seen.add(item.codigo);items.push(item);
   }
   // Determinism matters: feed ordering must not reorder page generation or URLs.
-  items.sort((a,b)=>a.codigo.localeCompare(b.codigo,'en'));
+  items.sort((a,b)=>(Date.parse(b.publicadoEm)||0)-(Date.parse(a.publicadoEm)||0)||a.codigo.localeCompare(b.codigo,'en'));
   const groups=new Map();
   function add(kind,item,operation,typeKey=''){
     const city=cityInfo(item),label=kind==='bairro'?text(item.bairro):kind==='condominio'?text(item.condominio):'';

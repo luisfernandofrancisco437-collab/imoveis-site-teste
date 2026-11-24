@@ -14,16 +14,30 @@ function validate(raw){
   const items=raw.items.map(p=>{assert(p&&/^[A-Z0-9_-]{1,80}$/.test(p.codigo)&&!seen.has(p.codigo),'Invalid/duplicate public code.');seen.add(p.codigo);assert(['Venda','Locação','Locação e Venda'].includes(p.operacao));assert(['Disponível','Em negociação','Reservado','Vendido','Alugado','Indisponível'].includes(p.status));
     const out={codigo:p.codigo};for(const k of ['titulo','tipo','cidade','bairro','condominio','descricao','uf'])if(typeof p[k]==='string')out[k]=p[k].slice(0,k==='descricao'?12000:300);
     assert(out.tipo&&out.cidade,'Property data incomplete.');out.bairro=out.bairro||'';out.titulo=out.titulo||out.tipo+(out.condominio?' · '+out.condominio:'');Object.assign(out,{operacao:p.operacao,status:p.status});
+    if(typeof p.publicadoEm==='string'&&Number.isFinite(Date.parse(p.publicadoEm)))out.publicadoEm=new Date(p.publicadoEm).toISOString();
     if(!out.uf&&out.cidade.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()==='mogi guacu')out.uf='SP';
     for(const k of ['valor','valorVenda','valorLocacao','area','dormitorios','suites','banheiros','vagas','valorCondominio','iptu'])if(typeof p[k]==='number'&&Number.isFinite(p[k])&&p[k]>=0)out[k]=p[k];
     assert(p.operacao==='Locação'||out.valorVenda>0,'Sale price missing.');assert(p.operacao==='Venda'||out.valorLocacao>0,'Rent missing.');out.valor=p.operacao==='Locação'?out.valorLocacao:out.valorVenda;
     out.fotos=(Array.isArray(p.fotos)?p.fotos:[]).map(url=>{const u=new URL(url);assert(u.origin===new URL(API).origin&&u.pathname.startsWith('/functions/v1/crm-public-catalog/photo/')&&!u.username&&!u.password&&!u.hash&&u.searchParams.get('site')==='luis-fernando','Photo outside public proxy.');assert(!u.searchParams.has('token'),'Signed/private photo refused.');return u.href;});assert(out.fotos.length<=100);out.foto=out.fotos[0]||'';
     if(Array.isArray(p.caracteristicas))out.caracteristicas=p.caracteristicas.filter(x=>typeof x==='string').map(x=>x.slice(0,150)).slice(0,100);return out;});
+  items.sort((a,b)=>(b.publicadoEm||'').localeCompare(a.publicadoEm||'')||a.codigo.localeCompare(b.codigo,'en'));
   return {schemaVersion:1,site:'luis-fernando',revision:raw.revision,sourceRevision:raw.sourceRevision,updatedAt:raw.updatedAt,items};
 }
 function active(p){return ['Disponível','Em negociação','Reservado'].includes(p.status);}
 function render(feed,previousManifest=[],options={}){
-  feed=validate(feed);const all=feed.items,available=all.filter(active),byCode=new Map(all.map(p=>[p.codigo,p])),files=new Map(),cache=new Map();let seo;
+  feed=validate(feed);
+  const previousState=options.previousState?.schemaVersion===1?options.previousState:{routes:{}};
+  const builtAt=options.builtAt||new Date().toISOString();
+  const firstListed=Object.assign(Object.create(null),previousState.firstListed);
+  for(const p of feed.items){
+    if(p.publicadoEm)firstListed[p.codigo]=p.publicadoEm;
+    else if(!Object.hasOwn(firstListed,p.codigo)){
+      firstListed[p.codigo]=options.previousState?.routes&&!Object.hasOwn(previousState.routes,'/imovel/'+p.codigo+'/')?builtAt:null;
+    }
+    if(firstListed[p.codigo])p.publicadoEm=firstListed[p.codigo];
+  }
+  feed.items.sort((a,b)=>(Date.parse(b.publicadoEm)||0)-(Date.parse(a.publicadoEm)||0)||a.codigo.localeCompare(b.codigo,'en'));
+  const all=feed.items,available=all.filter(active),byCode=new Map(all.map(p=>[p.codigo,p])),files=new Map(),cache=new Map();let seo;
   function load(file){file=path.resolve(file);assert(file.startsWith(templates+path.sep));if(cache.has(file))return cache.get(file).exports;const m={exports:{}};cache.set(file,m);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
     const req=id=>{if(id==='react'||id==='react/jsx-runtime')return require(id);if(id==='next/navigation')return {notFound(){throw Error('Public page not found.');}};assert(id.startsWith('.'),'Unexpected template dependency.');const target=path.resolve(path.dirname(file),id),rel=path.relative(templates,target).replace(/\\/g,'/');
       if(rel==='lib/catalogo')return {carregarImoveis:async()=>available,carregarImovel:async code=>byCode.get(code)||null,linkWhatsapp:(p,origin)=>'https://wa.me/5519989817571?text='+encodeURIComponent(`Olá, Luis Fernando! Tenho interesse no imóvel ${p.codigo} - ${p.titulo}. Gostaria de mais informações. ${origin||ORIGIN}/imovel/${encodeURIComponent(p.codigo)}/`)};
@@ -43,9 +57,7 @@ function render(feed,previousManifest=[],options={}){
       const facts=s.split(/\s*·\s*/).filter(x=>!/^\s*(?:0(?:[.,]0+)?\s*)?(?:dormitórios|vagas|m²)\s*$/.test(x));
       return facts.length?'<p>'+facts.join(' · ')+'</p>':'';
     });
-  const urls=new Map(),seoState={schemaVersion:1,routes:{},aliases:{}};
-  const previousState=options.previousState?.schemaVersion===1?options.previousState:{routes:{}};
-  const builtAt=options.builtAt||new Date().toISOString();
+  const urls=new Map(),seoState={schemaVersion:1,routes:{},aliases:{},firstListed};
   const localPages=buildLocalPages(available,{origin:ORIGIN,urlImovel:seo.urlImovel,escapeHTML:esc});
   const localLinks=localNavigation(localPages);
   const analytics={measurementId:typeof siteConfig.analytics?.measurementId==='string'?siteConfig.analytics.measurementId:'',privacyReviewed:siteConfig.analytics?.privacyReviewed===true};
@@ -88,6 +100,7 @@ async function run(){
   const force=process.argv.includes('--force');let previous={},previousState={};try{const r=await fetch(ORIGIN+'/public-revision.json',{signal:AbortSignal.timeout(12000),redirect:'error'});if(r.ok)previous=await r.json();}catch{}
   if(!force&&previous.revision===feed.revision&&previous.templateVersion===VERSION){if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,'changed=false\n');console.log('Public revision unchanged; no deployment.');return;}
   try{const r=await fetch(ORIGIN+'/seo-state.json',{signal:AbortSignal.timeout(12000),redirect:'error'});if(r.ok){const text=await r.text();assert(text.length<2000000);const raw=JSON.parse(text);if(raw.schemaVersion===1&&Object.keys(raw.routes||{}).length<=10000&&Object.keys(raw.aliases||{}).length<=20000)previousState=raw;}}catch{}
+  assert(previousState.routes?.['/'],'Histórico da publicação indisponível; preservando a versão online.');
   const oldManifestFile=path.join(base,'generated-manifest.json'),old=fs.existsSync(oldManifestFile)?JSON.parse(fs.readFileSync(oldManifestFile)):[];const result=await render(feed,old,{previousState});
   const output=fs.mkdtempSync(path.resolve(base,'../site-dist-build-'));
   for(const [name,body]of result.files){const target=path.resolve(output,name);assert(target.startsWith(output+path.sep));fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,body);}
